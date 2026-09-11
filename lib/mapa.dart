@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_compass/flutter_compass.dart';
+import 'dart:math' as math;
 import '../models/mapa.dart';
 import '../services/api_service.dart';
 
@@ -18,6 +20,7 @@ class _MapaTelaState extends State<MapaTela> {
   late Future<List<PontoInteresse>> _pontosFuture;
   LatLng? _userPosition;
   bool _loadingLocation = true;
+  bool _orientationModeEnabled = false;
 
   @override
   void initState() {
@@ -101,13 +104,15 @@ class _MapaTelaState extends State<MapaTela> {
               .map((p) => LatLng(p.latitude, p.longitude))
               .toList();
 
-          return FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
-              initialZoom: 14,
-            ),
+          return Stack(
             children: [
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
+                  initialZoom: 14,
+                ),
+                children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.cirio',
@@ -221,6 +226,13 @@ class _MapaTelaState extends State<MapaTela> {
                   );
                 },
               ),
+                ],
+              ),
+              if (_orientationModeEnabled)
+                _OrientationOverlay(
+                  userPosition: _userPosition,
+                  destination: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
+                ),
             ],
           );
         },
@@ -239,6 +251,18 @@ class _MapaTelaState extends State<MapaTela> {
             ),
           const SizedBox(height: 10),
           FloatingActionButton(
+            heroTag: 'orientation',
+            onPressed: () {
+              setState(() {
+                _orientationModeEnabled = !_orientationModeEnabled;
+              });
+            },
+            backgroundColor:
+                _orientationModeEnabled ? Colors.green : Colors.indigo,
+            child: const Icon(Icons.navigation, color: Colors.white),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton(
             heroTag: 'route',
             onPressed: () {
               _mapaFuture.then((mapa) {
@@ -254,5 +278,97 @@ class _MapaTelaState extends State<MapaTela> {
         ],
       ),
     );
+  }
+
+}
+
+class _OrientationOverlay extends StatelessWidget {
+  const _OrientationOverlay({
+    required this.userPosition,
+    required this.destination,
+  });
+
+  final LatLng? userPosition;
+  final LatLng destination;
+
+  double _bearingToDestination() {
+    final origin = userPosition!;
+    final latitude1 = origin.latitude * math.pi / 180;
+    final latitude2 = destination.latitude * math.pi / 180;
+    final differenceLongitude =
+        (destination.longitude - origin.longitude) * math.pi / 180;
+    final bearing = math.atan2(
+      math.sin(differenceLongitude) * math.cos(latitude2),
+      math.cos(latitude1) * math.sin(latitude2) -
+          math.sin(latitude1) *
+              math.cos(latitude2) *
+              math.cos(differenceLongitude),
+    );
+
+    return (bearing + 2 * math.pi) % (2 * math.pi);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 16,
+      left: 16,
+      right: 16,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: userPosition == null
+              ? const Row(
+                  children: [
+                    Icon(Icons.location_searching, color: Colors.blue),
+                    SizedBox(width: 12),
+                    Expanded(child: Text('Obtendo sua localização...')),
+                  ],
+                )
+              : StreamBuilder<CompassEvent>(
+                  stream: FlutterCompass.events,
+                  builder: (context, snapshot) {
+                    final heading = snapshot.data?.heading;
+                    if (heading == null) {
+                      return const Row(
+                        children: [
+                          Icon(Icons.explore_off, color: Colors.orange),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'A orientação do aparelho não está disponível.',
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    final angle =
+                        _bearingToDestination() - heading * math.pi / 180;
+                    return Row(
+                      children: [
+                        Transform.rotate(
+                          angle: angle,
+                          child: const Icon(
+                            Icons.navigation,
+                            color: Colors.red,
+                            size: 44,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Siga a seta para o início da procissão',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
   }
 }
