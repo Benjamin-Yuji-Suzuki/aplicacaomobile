@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:math' as math;
 import '../models/mapa.dart';
 import '../services/api_service.dart';
@@ -21,6 +23,11 @@ class _MapaTelaState extends State<MapaTela> {
   LatLng? _userPosition;
   bool _loadingLocation = true;
   bool _orientationModeEnabled = false;
+  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  DateTime? _lastShakeAt;
+
+  static const double _shakeAccelerationThreshold = 18;
+  static const Duration _shakeCooldown = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -28,6 +35,39 @@ class _MapaTelaState extends State<MapaTela> {
     _mapaFuture = ApiService.getMapaCirio();
     _pontosFuture = ApiService.getPontosInteresse();
     _getUserLocation();
+    _listenForShake();
+  }
+
+  void _listenForShake() {
+    _accelerometerSubscription = accelerometerEvents.listen((event) {
+      final acceleration = math.sqrt(
+        event.x * event.x + event.y * event.y + event.z * event.z,
+      );
+      final now = DateTime.now();
+      final canRecenter =
+          _lastShakeAt == null || now.difference(_lastShakeAt!) > _shakeCooldown;
+
+      if (acceleration >= _shakeAccelerationThreshold && canRecenter) {
+        _lastShakeAt = now;
+        _recenterOnUser();
+      }
+    });
+  }
+
+  Future<void> _recenterOnUser() async {
+    final knownPosition = _userPosition;
+    if (knownPosition != null) {
+      _mapController.move(knownPosition, 16);
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+
+      final userPosition = LatLng(position.latitude, position.longitude);
+      setState(() => _userPosition = userPosition);
+      _mapController.move(userPosition, 16);
+    } catch (_) {}
   }
 
   Future<void> _getUserLocation() async {
@@ -60,6 +100,12 @@ class _MapaTelaState extends State<MapaTela> {
     } catch (e) {
       setState(() => _loadingLocation = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _accelerometerSubscription?.cancel();
+    super.dispose();
   }
 
   @override
