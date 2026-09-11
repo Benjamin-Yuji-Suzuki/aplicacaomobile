@@ -370,5 +370,4 @@ class _OrientationOverlay extends StatelessWidget {
       ),
     );
   }
-  }
 }
