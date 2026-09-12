@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Sua localização é usada para orientar você até o início da procissão.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A câmera é usada pelo sensor para identificar a iluminação do ambiente.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
