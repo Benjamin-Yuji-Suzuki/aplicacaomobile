@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/noticia.dart';
 import '../models/mapa.dart';
+import '../models/rota.dart';
 
 class ApiService {
   static const String baseUrl = 'https://cirio-belem-api.onrender.com';
@@ -49,6 +50,17 @@ class ApiService {
       return dados.map((json) => PontoInteresse.fromJson(json)).toList();
     } else {
       throw Exception('Erro ao carregar pontos: ${response.statusCode}');
+    }
+  }
+
+  static Future<Rota> getRetaAteInicio(double latitude, double longitude) async {
+    final url = Uri.parse('$baseUrl/rota/ate-inicio?latitude=$latitude&longitude=$longitude');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return Rota.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Erro ao carregar rota: ${response.statusCode}');
     }
   }
 }

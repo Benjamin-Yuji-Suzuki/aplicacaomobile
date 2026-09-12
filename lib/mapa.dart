@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:math' as math;
 import '../models/mapa.dart';
+import '../models/rota.dart';
 import '../services/api_service.dart';
 import '../services/compass_service.dart';
 
@@ -24,6 +25,9 @@ class _MapaTelaState extends State<MapaTela> {
   LatLng? _userPosition;
   bool _loadingLocation = true;
   bool _orientationModeEnabled = false;
+  bool _showingRoute = false;
+  Rota? _currentRoute;
+  bool _loadingRoute = false;
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   DateTime? _lastShakeAt;
 
@@ -103,6 +107,42 @@ class _MapaTelaState extends State<MapaTela> {
     }
   }
 
+  Future<void> _loadRouteToStart() async {
+    if (_userPosition == null) return;
+
+    setState(() => _loadingRoute = true);
+
+    try {
+      final route = await ApiService.getRetaAteInicio(
+        _userPosition!.latitude,
+        _userPosition!.longitude,
+      );
+      setState(() {
+        _currentRoute = route;
+        _showingRoute = true;
+        _loadingRoute = false;
+      });
+    } catch (e) {
+      setState(() => _loadingRoute = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar rota: $e')),
+        );
+      }
+    }
+  }
+
+  void _toggleRoute() {
+    if (_showingRoute) {
+      setState(() {
+        _showingRoute = false;
+        _currentRoute = null;
+      });
+    } else {
+      _loadRouteToStart();
+    }
+  }
+
   @override
   void dispose() {
     _accelerometerSubscription?.cancel();
@@ -160,125 +200,232 @@ class _MapaTelaState extends State<MapaTela> {
                   initialZoom: 14,
                 ),
                 children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.cirio',
-              ),
-
-              // Linha do percurso
-              PolylineLayer(
-                polylines: [
-                  Polyline(
-                    points: pontos,
-                    strokeWidth: 4,
-                    color: Colors.red,
-                  ),
-                ],
-              ),
-
-              // Marcadores
-              MarkerLayer(
-                markers: [
-                  // Início
-                  Marker(
-                    point: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
-                    width: 80,
-                    height: 80,
-                    child: const Column(
-                      children: [
-                        Icon(Icons.play_circle, color: Colors.green, size: 40),
-                      ],
-                    ),
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.cirio',
                   ),
 
-                  // Fim
-                  Marker(
-                    point: LatLng(mapa.fim.latitude, mapa.fim.longitude),
-                    width: 80,
-                    height: 80,
-                    child: const Column(
-                      children: [
-                        Icon(Icons.flag, color: Colors.red, size: 40),
-                      ],
-                    ),
-                  ),
-
-                  // Posição do usuário
-                  if (_userPosition != null)
-                    Marker(
-                      point: _userPosition!,
-                      width: 80,
-                      height: 80,
-                      child: const Icon(
-                        Icons.person_pin_circle,
-                        color: Colors.blue,
-                        size: 40,
+                  // Linha do percurso oficial do Círio
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: pontos,
+                        strokeWidth: 4,
+                        color: Colors.red,
                       ),
+                    ],
+                  ),
+
+                  // Linha da rota até o início (se ativa)
+                  if (_showingRoute && _currentRoute != null)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _currentRoute!.pontos,
+                          strokeWidth: 5,
+                          color: Colors.blue,
+                          borderStrokeWidth: 2,
+                          borderColor: Colors.white,
+                        ),
+                      ],
                     ),
-                ],
-              ),
 
-              // Pontos de interesse
-              FutureBuilder<List<PontoInteresse>>(
-                future: _pontosFuture,
-                builder: (context, pontosSnapshot) {
-                  if (!pontosSnapshot.hasData) return const SizedBox.shrink();
-
-                  return MarkerLayer(
-                    markers: pontosSnapshot.data!.map((ponto) {
-                      IconData icon;
-                      Color color;
-                      switch (ponto.tipo) {
-                        case 'inicio':
-                          icon = Icons.play_circle;
-                          color = Colors.green;
-                          break;
-                        case 'chegada':
-                          icon = Icons.flag;
-                          color = Colors.red;
-                          break;
-                        case 'ponto_turistico':
-                          icon = Icons.camera_alt;
-                          color = Colors.orange;
-                          break;
-                        default:
-                          icon = Icons.place;
-                          color = Colors.purple;
-                      }
-
-                      return Marker(
-                        point: LatLng(ponto.latitude, ponto.longitude),
+                  // Marcadores
+                  MarkerLayer(
+                    markers: [
+                      // Início
+                      Marker(
+                        point: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
                         width: 80,
                         height: 80,
-                        child: GestureDetector(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: Text(ponto.nome),
-                                content: Text(ponto.descricao),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Fechar'),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                          child: Icon(icon, color: color, size: 35),
+                        child: const Column(
+                          children: [
+                            Icon(Icons.play_circle, color: Colors.green, size: 40),
+                          ],
                         ),
+                      ),
+
+                      // Fim
+                      Marker(
+                        point: LatLng(mapa.fim.latitude, mapa.fim.longitude),
+                        width: 80,
+                        height: 80,
+                        child: const Column(
+                          children: [
+                            Icon(Icons.flag, color: Colors.red, size: 40),
+                          ],
+                        ),
+                      ),
+
+                      // Posição do usuário
+                      if (_userPosition != null)
+                        Marker(
+                          point: _userPosition!,
+                          width: 80,
+                          height: 80,
+                          child: const Icon(
+                            Icons.person_pin_circle,
+                            color: Colors.blue,
+                            size: 40,
+                          ),
+                        ),
+                    ],
+                  ),
+
+                  // Pontos de interesse
+                  FutureBuilder<List<PontoInteresse>>(
+                    future: _pontosFuture,
+                    builder: (context, pontosSnapshot) {
+                      if (!pontosSnapshot.hasData) return const SizedBox.shrink();
+
+                      return MarkerLayer(
+                        markers: pontosSnapshot.data!.map((ponto) {
+                          IconData icon;
+                          Color color;
+                          switch (ponto.tipo) {
+                            case 'inicio':
+                              icon = Icons.play_circle;
+                              color = Colors.green;
+                              break;
+                            case 'chegada':
+                              icon = Icons.flag;
+                              color = Colors.red;
+                              break;
+                            case 'ponto_turistico':
+                              icon = Icons.camera_alt;
+                              color = Colors.orange;
+                              break;
+                            default:
+                              icon = Icons.place;
+                              color = Colors.purple;
+                          }
+
+                          return Marker(
+                            point: LatLng(ponto.latitude, ponto.longitude),
+                            width: 80,
+                            height: 80,
+                            child: GestureDetector(
+                              onTap: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: Text(ponto.nome),
+                                    content: Text(ponto.descricao),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Fechar'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              child: Icon(icon, color: color, size: 35),
+                            ),
+                          );
+                        }).toList(),
                       );
-                    }).toList(),
-                  );
-                },
-              ),
+                    },
+                  ),
                 ],
               ),
+
+              // Overlay de orientação
               if (_orientationModeEnabled)
                 _OrientationOverlay(
                   userPosition: _userPosition,
                   destination: LatLng(mapa.inicio.latitude, mapa.inicio.longitude),
+                ),
+
+              // Card com informações da rota
+              if (_showingRoute && _currentRoute != null)
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Card(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.directions, color: Colors.blue),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Como chegar ao Círio',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Distância: ${(_currentRoute!.distanciaMetros / 1000).toStringAsFixed(1)} km',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          Text(
+                            'Tempo estimado: ${(_currentRoute!.duracaoSegundos / 60).toStringAsFixed(0)} min',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 20,
+                                      height: 4,
+                                      color: Colors.blue,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text('Sua rota'),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 20,
+                                      height: 4,
+                                      color: Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text('Percurso oficial'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Indicador de carregando rota
+              if (_loadingRoute)
+                const Center(
+                  child: Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(width: 16),
+                          Text('Calculando rota...'),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
             ],
           );
@@ -295,6 +442,24 @@ class _MapaTelaState extends State<MapaTela> {
               },
               backgroundColor: Colors.blue,
               child: const Icon(Icons.my_location, color: Colors.white),
+            ),
+          const SizedBox(height: 10),
+          // FAB Como chegar
+          if (_userPosition != null)
+            FloatingActionButton(
+              heroTag: 'route_to_start',
+              onPressed: _loadingRoute ? null : _toggleRoute,
+              backgroundColor: _showingRoute ? Colors.blue : Colors.teal,
+              child: _loadingRoute
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.directions, color: Colors.white),
             ),
           const SizedBox(height: 10),
           FloatingActionButton(
@@ -326,7 +491,6 @@ class _MapaTelaState extends State<MapaTela> {
       ),
     );
   }
-
 }
 
 class _OrientationOverlay extends StatelessWidget {
