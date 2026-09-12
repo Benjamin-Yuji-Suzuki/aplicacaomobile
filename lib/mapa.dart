@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_compass/flutter_compass.dart';
+import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:math' as math;
 import '../models/mapa.dart';
 import '../services/api_service.dart';
+import '../services/compass_service.dart';
 
 class MapaTela extends StatefulWidget {
   const MapaTela({super.key});
@@ -371,10 +372,10 @@ class _OrientationOverlay extends StatelessWidget {
                     Expanded(child: Text('Obtendo sua localização...')),
                   ],
                 )
-              : StreamBuilder<CompassEvent>(
-                  stream: FlutterCompass.events,
+              : StreamBuilder<double>(
+                  stream: CompassService.events,
                   builder: (context, snapshot) {
-                    final heading = snapshot.data?.heading;
+                    final heading = snapshot.data;
                     if (heading == null) {
                       return const Row(
                         children: [
