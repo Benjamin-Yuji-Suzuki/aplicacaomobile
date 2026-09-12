@@ -32,7 +32,7 @@ class _MapaTelaState extends State<MapaTela> {
   StreamSubscription<double>? _accelerometerSubscription;
   DateTime? _lastShakeAt;
 
-  static const double _shakeAccelerationThreshold = 18;
+  static const double _shakeAccelerationThreshold = 12;
   static const Duration _shakeCooldown = Duration(seconds: 2);
 
   @override

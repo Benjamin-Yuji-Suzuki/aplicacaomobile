@@ -5,6 +5,8 @@ import 'noticias.dart';
 import 'agenda.dart';
 import 'gastronomia.dart';
 import 'mapa.dart';
+import 'theme/app_theme.dart';
+import 'services/light_sensor_service.dart';
 
 void main() {
   runApp(const CirioApp());
@@ -17,42 +19,53 @@ class CirioApp extends StatefulWidget {
   State<CirioApp> createState() => _CirioAppState();
 }
 
-class _CirioAppState extends State<CirioApp> with WidgetsBindingObserver {
+class _CirioAppState extends State<CirioApp> {
+  static const double _darkModeThreshold = 20;
+  static const double _lightModeThreshold = 40;
+
+  StreamSubscription<double>? _lightSubscription;
+  bool _isDarkMode = false;
+  bool _sensorAvailable = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    _initLightSensor();
+  }
+
+  Future<void> _initLightSensor() async {
+    _sensorAvailable = await LightSensorService.isAvailable();
+    if (!_sensorAvailable) return;
+
+    _lightSubscription = LightSensorService.events.listen(
+      _updateThemeFromLight,
+      onError: (_) {},
+    );
+  }
+
+  void _updateThemeFromLight(double lightLevel) {
+    final shouldUseDarkMode = _isDarkMode
+        ? lightLevel < _lightModeThreshold
+        : lightLevel < _darkModeThreshold;
+
+    if (shouldUseDarkMode == _isDarkMode || !mounted) return;
+    setState(() => _isDarkMode = shouldUseDarkMode);
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _lightSubscription?.cancel();
     super.dispose();
   }
 
   @override
-  void didChangePlatformBrightness() {
-    setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDarkMode = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Círio de Nazaré',
-      theme: ThemeData(
-        brightness: Brightness.light,
-        colorSchemeSeed: Colors.blue,
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        colorSchemeSeed: Colors.blue,
-        useMaterial3: true,
-      ),
-      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: const TelaInicial(),
     );
   }
@@ -67,8 +80,6 @@ class TelaInicial extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Círio de Nazaré'),
         centerTitle: true,
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
       ),
 
       body: Padding(
@@ -78,20 +89,20 @@ class TelaInicial extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
 
-            const Icon(
+            Icon(
               Icons.church,
               size: 80,
-              color: Colors.blue,
+              color: Theme.of(context).colorScheme.primary,
             ),
 
             const SizedBox(height: 20),
 
-            const Text(
+            Text(
               'Círio de Nazaré',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
 

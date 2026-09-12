@@ -8,5 +8,6 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.plugins.add(CompassPlugin())
         flutterEngine.plugins.add(AccelerometerPlugin())
+        flutterEngine.plugins.add(LightSensorPlugin())
     }
 }
