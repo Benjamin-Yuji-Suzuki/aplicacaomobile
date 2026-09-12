@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:ambient_light/ambient_light.dart';
 
 import 'noticias.dart';
 import 'agenda.dart';
@@ -18,50 +17,28 @@ class CirioApp extends StatefulWidget {
   State<CirioApp> createState() => _CirioAppState();
 }
 
-class _CirioAppState extends State<CirioApp> {
-  static const double _darkModeThreshold = 20;
-  static const double _lightModeThreshold = 40;
-
-  final AmbientLight _ambientLight = AmbientLight();
-  StreamSubscription<double>? _ambientLightSubscription;
-  bool _isDarkMode = false;
-
+class _CirioAppState extends State<CirioApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    _readAmbientLight();
-    _ambientLightSubscription = _ambientLight.ambientLightStream.listen(
-      _updateThemeFromAmbientLight,
-      onError: (_) {},
-    );
-  }
-
-  Future<void> _readAmbientLight() async {
-    try {
-      final lightLevel = await _ambientLight.currentAmbientLight();
-      if (lightLevel != null) {
-        _updateThemeFromAmbientLight(lightLevel);
-      }
-    } catch (_) {}
-  }
-
-  void _updateThemeFromAmbientLight(double lightLevel) {
-    final shouldUseDarkMode = _isDarkMode
-        ? lightLevel < _lightModeThreshold
-        : lightLevel < _darkModeThreshold;
-
-    if (shouldUseDarkMode == _isDarkMode || !mounted) return;
-    setState(() => _isDarkMode = shouldUseDarkMode);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    _ambientLightSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
+  void didChangePlatformBrightness() {
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDarkMode = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Círio de Nazaré',
@@ -75,7 +52,7 @@ class _CirioAppState extends State<CirioApp> {
         colorSchemeSeed: Colors.blue,
         useMaterial3: true,
       ),
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: const TelaInicial(),
     );
   }
