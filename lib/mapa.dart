@@ -10,6 +10,7 @@ import '../models/mapa.dart';
 import '../models/rota.dart';
 import '../services/api_service.dart';
 import '../services/compass_service.dart';
+import '../services/accelerometer_service.dart';
 
 class MapaTela extends StatefulWidget {
   const MapaTela({super.key});
@@ -28,7 +29,7 @@ class _MapaTelaState extends State<MapaTela> {
   bool _showingRoute = false;
   Rota? _currentRoute;
   bool _loadingRoute = false;
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  StreamSubscription<double>? _accelerometerSubscription;
   DateTime? _lastShakeAt;
 
   static const double _shakeAccelerationThreshold = 18;
@@ -44,10 +45,7 @@ class _MapaTelaState extends State<MapaTela> {
   }
 
   void _listenForShake() {
-    _accelerometerSubscription = accelerometerEvents.listen((event) {
-      final acceleration = math.sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
-      );
+    _accelerometerSubscription = AccelerometerService.events.listen((acceleration) {
       final now = DateTime.now();
       final canRecenter =
           _lastShakeAt == null || now.difference(_lastShakeAt!) > _shakeCooldown;
